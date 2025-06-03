@@ -14,16 +14,16 @@
             "pooling": "max",
             "share_embed": false
         },
-        "over": {
-            "hidden_layers": "1024-512"
-        },
+        "over": "1024-512",
         "sparse_inter": [
             "cat",
             "dot"
         ]
     },
     "train": {
-        "max_epoch": 20,
-        "weight_decay_dense": 0.01
+        "max_epoch": 50,
+        "weight_decay_dense": 0.01,
+        "dropout": 0.0,
+        "lr": 0.01
     }
 }

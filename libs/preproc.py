@@ -251,13 +251,13 @@ class UserShowRatingDataset(Dataset):
             u, s, r = self.ratings[idx]
 
         if not self.neg_sampling:
-            label = [1 if r > v else 0 for v in [5, 6, 7, 8, 9]]
+            label = [1.0 if r > v else 0.0 for v in [5, 6, 7, 8, 9]]
             weights = [torch.tensor(1.0)] * NUM_LABEL
         elif neg_sample:
-            label = [0] * (NUM_LABEL - 1) + [0]
+            label = [0.0] * (NUM_LABEL - 1) + [0.0]
             weights = [0.0] * (NUM_LABEL - 1) + [1.0]
         else:
-            label = [1 if r > v else 0 for v in [5, 6, 7, 8, 9]] + [1]
+            label = [1.0 if r > v else 0.0 for v in [5, 6, 7, 8, 9]] + [1.0]
             weights = [1.0] * (NUM_LABEL - 1) + [1.0]
 
         return (
@@ -291,7 +291,7 @@ def custom_collate_fn(batch):
 
     # get labels and weights
     weights = [torch.tensor([w[i] for _, _, w in batch]) for i in range(NUM_LABEL)]
-    labels = [torch.LongTensor([l[i] for _, l, _ in batch]) for i in range(NUM_LABEL)]
+    labels = [torch.tensor([l[i] for _, l, _ in batch]) for i in range(NUM_LABEL)]
     return lt_input_and_offsets, gt_input_and_offsets, show_ids, labels, weights
 
 
