@@ -12,6 +12,14 @@ def get_value(key):
     return None
 
 
+
+def get_config(config_path):
+    with open(config_path, "r") as f:
+        config = json.load(f)
+        return config
+    return None
+
+
 def load_show_details(filename):
     print(f"loading show details from {filename}")
     with open(filename, "rb") as handle:

@@ -1,8 +1,10 @@
 {
     "preproc": {
         "user_review_cnt_lo": 10,
-        "user_review_cnt_hi": 500,
+        "user_review_cnt_hi": 1000,
         "show_review_cnt_lo": 100,
-        "show_review_cnt_hi": null
+        "show_review_cnt_hi": null,
+        "in_user_split_ratio": "75:15:10",
+        "out_user_split_ratio": "75:15:10"
     }
 }
