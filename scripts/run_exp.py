@@ -15,6 +15,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("exp_path")
     parser.add_argument("data")
+    parser.add_argument("--cuda", default="cuda")
     args = parser.parse_args()
 
     config_base = bases.get_config(os.path.join(args.exp_path, "config.json"))
@@ -42,7 +43,7 @@ if __name__ == "__main__":
         dataset_val, batch_size=2048, collate_fn=preproc.custom_collate_fn, shuffle=True
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.cuda if torch.cuda.is_available() else "cpu")
 
     model = PaaSModel(
         embed_dim=config_base["model"]["sparse"]["embed_dim"],
