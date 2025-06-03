@@ -6,5 +6,11 @@
         "show_review_cnt_hi": null,
         "in_user_split_ratio": "75:15:10",
         "out_user_split_ratio": "75:15:10"
+    },
+    "model": {
+        "sparse": {
+            "embed_dim": 64,
+            "max_id": 30000
+        }
     }
 }
