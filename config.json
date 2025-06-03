@@ -1,0 +1,8 @@
+{
+    "preproc": {
+        "user_review_cnt_lo": 10,
+        "user_review_cnt_hi": 500,
+        "show_review_cnt_lo": 100,
+        "show_review_cnt_hi": null
+    }
+}
