@@ -5,24 +5,8 @@ from torch.utils.data import Dataset
 from collections import Counter, namedtuple
 import hashlib
 import pickle
-
-
-# UserFeat = namedtuple(
-#     "UserFeat",
-#     [
-#         "lt_5",
-#         "lt_6",
-#         "lt_7",
-#         "lt_8",
-#         "lt_9",
-#         "lt_10",
-#         "gt_5",
-#         "gt_6",
-#         "gt_7",
-#         "gt_8",
-#         "gt_9",
-#     ],
-# )
+from libs.model import HASH_SIZE, NUM_LABEL, NUM_GT, NUM_LT
+from random import randint
 
 Feat = namedtuple("Feat", ["user_feat", "show_id"])
 
@@ -185,12 +169,14 @@ class UserShowRatingDataset(Dataset):
     def __init__(
         self,
         ratings,
-        user_weight=None,
+        # user_weight=None,
         pad_zero=True,
+        neg_sampling=True,
     ):
         self.ratings = ratings
         self.pad_zero = pad_zero
-        self.user_weight = user_weight
+        # self.user_weight = user_weight
+        self.neg_sampling = neg_sampling
 
         # get all users and their corresponding shows ids
         self.user_feats = self._prepare_users()
@@ -254,67 +240,69 @@ class UserShowRatingDataset(Dataset):
     #         self.user_review_count[u] += 1.0
 
     def __len__(self):
-        return len(self.ratings)
+        return len(self.ratings) if not self.neg_sampling else 2 * len(self.ratings)
 
     def __getitem__(self, idx):
-        u, s, r = self.ratings[idx]
-        label = [1 if r > v else 0 for v in [5, 6, 7, 8, 9]]
+        neg_sample = idx >= len(self.ratings)
+        if neg_sample:
+            u, _, r = self.ratings[idx - len(self.ratings)]
+            s = randint(1, HASH_SIZE - 1)
+        else:
+            u, s, r = self.ratings[idx]
+
+        if not self.neg_sampling:
+            label = [1 if r > v else 0 for v in [5, 6, 7, 8, 9]]
+            weights = [torch.tensor(1.0)] * NUM_LABEL
+        elif neg_sample:
+            label = [0] * (NUM_LABEL - 1) + [0]
+            weights = [0.0] * (NUM_LABEL - 1) + [1.0]
+        else:
+            label = [1 if r > v else 0 for v in [5, 6, 7, 8, 9]] + [1]
+            weights = [1.0] * (NUM_LABEL - 1) + [1.0]
+
         return (
             Feat(user_feat=self.user_feats[u], show_id=s),
-            [torch.tensor(v) for v in label],
-            [
-                (
-                    torch.tensor(self.user_weight[u])
-                    if self.user_weight
-                    else torch.tensor(1.0)
-                )
-                for v in label
-            ],
+            label,
+            weights,
         )
 
 
 def custom_collate_fn(batch):
-    # labels = [[], [], [], [], []]
-    # weights = [[], [], [], [], []]
-    # gt_input_and_offsets = [
-    #     [[], []],
-    #     [[], []],
-    #     [[], []],
-    #     [[], []]
-    # ]
-    # for f, l, w in batch:
-    #     for i in range(5):
-    #         labels[i].append(l[i])
-    #         weights[i].append(w[i])
-    #     show_ids.append(f.show_id)
-
-    # for i in range(5):
-    #     labels[i] = torch.tensor(labels[i])
-    #     weights[i] = torch.tensor(weights[i])
-    # show_ids = torch.LongTensor(show_ids)
     batch = list(batch)
     show_ids = torch.LongTensor([f.show_id for f, _, _ in batch])
 
-    gt_input_and_offsets = []
-    num_gt = 6  # len(batch[0][0].user_feat[0])
-    for i in range(num_gt):
-        offsets = torch.LongTensor([0] + [len(f.user_feat[0][i]) for f, _, _ in batch[:-1]])
+    lt_input_and_offsets = []
+    for i in range(NUM_LT):
+        offsets = torch.LongTensor(
+            [0] + [len(f.user_feat[0][i]) for f, _, _ in batch[:-1]]
+        )
         offsets = offsets.cumsum(0)
         input_tensor = torch.cat([f.user_feat[0][i] for f, _, _ in batch])
-        gt_input_and_offsets.append((input_tensor, offsets))
-
-    lt_input_and_offsets = []
-    num_gt = 5  # len(batch[0][0].user_feat[1])
-    for i in range(num_gt):
-        offsets = torch.LongTensor([0] + [len(f.user_feat[1][i]) for f, _, _ in batch[:-1]])
-        offsets = offsets.cumsum(0)
-        input_tensor = torch.cat([f.user_feat[1][i] for f, _, _ in batch])
         lt_input_and_offsets.append((input_tensor, offsets))
 
+    gt_input_and_offsets = []
+    for i in range(NUM_GT):
+        offsets = torch.LongTensor(
+            [0] + [len(f.user_feat[1][i]) for f, _, _ in batch[:-1]]
+        )
+        offsets = offsets.cumsum(0)
+        input_tensor = torch.cat([f.user_feat[1][i] for f, _, _ in batch])
+        gt_input_and_offsets.append((input_tensor, offsets))
+
     # get labels and weights
-    num_labels = 5  # len(batch[0][1])
-    # print()
-    
-    weights = [torch.tensor([w[i] for _, _, w in batch]) for i in range(num_labels)]
-    labels = [torch.tensor([l[i] for _, l, _ in batch]) for i in range(num_labels)]
+    weights = [torch.tensor([w[i] for _, _, w in batch]) for i in range(NUM_LABEL)]
+    labels = [torch.LongTensor([l[i] for _, l, _ in batch]) for i in range(NUM_LABEL)]
     return lt_input_and_offsets, gt_input_and_offsets, show_ids, labels, weights
+
+
+def to_device(
+    device, lt_input_and_offsets, gt_input_and_offsets, show_ids, labels, weights
+):
+
+    return (
+        [(i.to(device), o.to(device)) for i, o in lt_input_and_offsets],
+        [(i.to(device), o.to(device)) for i, o in gt_input_and_offsets],
+        show_ids.to(device),
+        [l.to(device) for l in labels],
+        [w.to(device) for w in weights],
+    )

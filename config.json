@@ -10,7 +10,20 @@
     "model": {
         "sparse": {
             "embed_dim": 64,
-            "max_id": 30000
-        }
+            "max_id": 21000,
+            "pooling": "max",
+            "share_embed": false
+        },
+        "over": {
+            "hidden_layers": "1024-512"
+        },
+        "sparse_inter": [
+            "cat",
+            "dot"
+        ]
+    },
+    "train": {
+        "max_epoch": 20,
+        "weight_decay_dense": 0.01
     }
 }
