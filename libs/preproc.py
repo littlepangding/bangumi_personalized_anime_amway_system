@@ -165,6 +165,24 @@ def load_split_data(filename):
     )
 
 
+def prep_infer_for_user(all_shows, old_to_new, ids_to_rec_set):
+    show_ratings = []
+    watched_shows = set()
+    for s, r, t, c in all_shows:
+        if s not in old_to_new:
+            continue
+        n_s = old_to_new[s]
+        if n_s not in ids_to_rec_set:
+            continue
+        if r > 0:
+            show_ratings.append((n_s, r))
+        if t == 1:
+            pass
+        else:
+            watched_shows.add(n_s)
+    return show_ratings, watched_shows
+
+
 class UserShowRatingDataset(Dataset):
     def __init__(
         self,
@@ -295,14 +313,90 @@ def custom_collate_fn(batch):
     return lt_input_and_offsets, gt_input_and_offsets, show_ids, labels, weights
 
 
+class UserShowRatingInferDataset(Dataset):
+    def __init__(
+        self,
+        show_ratings,
+        shows_to_infer,
+        pad_zero=True,
+    ):
+        self.show_ratings = show_ratings
+        self.pad_zero = pad_zero
+        self.shows_to_infer = shows_to_infer
+
+        # get all users and their corresponding shows ids
+        self.user_feat = self._prepare_users()
+
+    def _prepare_users(self):
+        s_r = self.show_ratings
+        user_feats = [
+            # lt ids
+            [
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 5] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 6] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 7] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 8] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 9] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r < 10] + [0] if self.pad_zero else []
+                ),
+            ],
+            # gt ids
+            [
+                torch.LongTensor(
+                    [s for s, r in s_r if r > 5] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r > 6] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r > 7] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r > 8] + [0] if self.pad_zero else []
+                ),
+                torch.LongTensor(
+                    [s for s, r in s_r if r > 9] + [0] if self.pad_zero else []
+                ),
+            ],
+        ]
+        return user_feats
+
+    def __len__(self):
+        return len(self.shows_to_infer)
+
+    def __getitem__(self, idx):
+        s = self.shows_to_infer[idx]
+        return (
+            Feat(user_feat=self.user_feat, show_id=s),
+            [1] * NUM_LABEL,
+            [torch.tensor(1.0)] * NUM_LABEL,
+        )
+
+
 def to_device(
-    device, lt_input_and_offsets, gt_input_and_offsets, show_ids, labels, weights
+    device,
+    lt_input_and_offsets,
+    gt_input_and_offsets,
+    show_ids,
+    labels=None,
+    weights=None,
 ):
 
     return (
         [(i.to(device), o.to(device)) for i, o in lt_input_and_offsets],
         [(i.to(device), o.to(device)) for i, o in gt_input_and_offsets],
-        show_ids.to(device),
-        [l.to(device) for l in labels],
-        [w.to(device) for w in weights],
+        show_ids.to(device) if show_ids is not None else None,
+        [l.to(device) for l in labels] if labels is not None else None,
+        [w.to(device) for w in weights] if weights is not None else None,
     )

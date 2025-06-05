@@ -1,6 +1,8 @@
 from libs import preproc
 from libs.model import NUM_LABEL
-
+from libs import bases
+import json
+import torch
 
 def get_sum_loss(losses, preds, weights, labels):
     loss_vals = [
@@ -45,6 +47,31 @@ def infer_and_get_losses(
         total_loss,
         loss_vals,
     )
+
+def infer_and_get_logits(
+    device,
+    model,
+    lt_input_and_offsets,
+    gt_input_and_offsets,
+    show_ids,
+):
+    (
+        lt_input_and_offsets,
+        gt_input_and_offsets,
+        show_ids,
+        _,
+        _,
+    ) = preproc.to_device(
+        device,
+        lt_input_and_offsets,
+        gt_input_and_offsets,
+        show_ids,
+        None,
+        None,
+    )
+    preds = model(lt_input_and_offsets, gt_input_and_offsets, show_ids)
+
+    return [torch.sigmoid(pred) for pred in preds]
 
 
 def eval(loader, model, losses, device, max_iter=None):
@@ -126,3 +153,5 @@ def sum_epoch_losses(name, epoch, epoch_loss):
         f"Report: {name}\tEpoch {epoch}, total loss: {overall_sum_loss}\tAverage Weighted Loss: {average_loss}"
     )
     return overall_sum_loss
+
+
