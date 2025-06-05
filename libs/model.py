@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import json
+from libs import bases
 
 NUM_EMBED = 5 + 6 + 1
 NUM_LABEL = 6  # 5 or 6
@@ -144,3 +146,12 @@ class PaaSModel(nn.Module):
         # final pred
         outs = [self.linears[i](over).squeeze(1) for i in range(NUM_LABEL)]
         return outs
+
+
+def load_model(config_path, ckp_path, device):
+    print(f"Loading model from ckp_path: {ckp_path}")
+    config = bases.get_config(config_path)
+    print(f"config: {json.dumps(config, indent=4)}")
+    model = torch.load(ckp_path, weights_only=False).to(device)
+    model.eval()
+    return model
