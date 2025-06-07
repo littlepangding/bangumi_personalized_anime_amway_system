@@ -57,6 +57,9 @@ def infer_for_user(user, model):
         f"用户ID:{user}, 提取数据:{len(all_shows)}, "
         f"提取评分:{len(show_ratings)}, 已看:{len(watched_shows)}"
     )
+    if not show_ratings:
+        msg.append("似乎无法提取评分数据，无法生成个性化推荐。")
+        return False, False, msg
     shows_to_infer = sorted(list(ids_to_rec_final - watched_shows))
     dataset = preproc.UserShowRatingInferDataset(
         show_ratings=show_ratings,
@@ -88,6 +91,59 @@ def infer_for_user(user, model):
         break
     print(f"User show watch/rating probability inference finished")
     return [l.detach().cpu().numpy() for l in logits], shows_to_infer, msg
+
+
+def rec_top_k_v1(
+    logits, shows_to_infer, k, k_min, mode=2, thd=0.2, show_to_exclude=None
+):
+    """
+    mode:
+        1: rank by review prob
+        2n: rank by the rating alone
+        2n+1 rank by the aggr. prob
+
+    """
+    review_prob = list(logits[-1])
+    # rate 10, 9, 8, 7, 6
+    ratex_prob = list(
+        zip(list(logits[-2]), list(logits[-3]), list(logits[-4]), list(logits[-5]))
+    )
+    show_results = [
+        (shows_to_infer[i], pr, px)
+        for i, (pr, px) in enumerate(zip(review_prob, ratex_prob))
+    ]
+
+    def _get_value(pr, px, mode):
+        if mode == 1:
+            return pr, px[0]
+        elif mode % 2 == 0:
+            idx = mode / 2 - 1
+            return px[idx], px[idx]
+        else:
+            idx = mode // 2 - 1
+            return pr * px[idx], px[idx]
+
+    show_results = sorted(show_results, key=lambda x: -_get_value(x[1], x[2], mode)[0])
+
+    msg = []
+    rec_shows = []
+    for i, (s, pr, px) in enumerate(show_results[:k]):
+        if show_to_exclude is not None and s in show_to_exclude:
+            continue
+        val, px_val = _get_value(pr, px, mode)
+        if len(rec_shows) >= k_min and val < thd:
+            break
+
+        rec_shows.append(s)
+        msg.append(
+            f"推荐{len(rec_shows)}: {print_show_detail_new(s)}; 观看概率: {pr:03f}, 好评概率: {px_val:03f} 综合概率:{val:03f}"
+        )
+        print(
+            f"Review: {pr:03f},\tRank Value: {val:03f}\t RateX: {[f'{x:03f}' for x in px]}"
+            f"\tRec: {print_show_detail_new(s)}\tid: {new_to_old[s]}"
+        )
+
+    return msg
 
 
 def rec_top_k(logits, shows_to_infer, k, k_min, mode=2, thd=0.2, show_to_exclude=None):
@@ -177,7 +233,7 @@ def extract_actual_id(text: str) -> str:
     # Regex breakdown:
     # ^id\s+       → starts with 'id' followed by one or more space-like characters
     # ([a-zA-Z0-9]+) → capture the ACTUAL_ID (alphanumeric)
-    match = re.match(r"^id\s+([a-zA-Z0-9]+)", text)
+    match = re.match(r"^id\s+([a-zA-Z0-9_]+)", text)
     if match:
         return match.group(1)
     return ""
@@ -203,15 +259,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     version = args.version
-    print("param\tversion:{version}\t rec version")
+    print(f"param\tversion:{version}\t rec version")
     k = args.k
-    print("param\tk:{k}\t recommend at most top k")
+    print(f"param\tk:{k}\t recommend at most top k")
     k_min = args.k_min
-    print("param\tk_min:{k_min}\t recommend at least top k")
+    print(f"param\tk_min:{k_min}\t recommend at least top k")
     mode = args.mode
-    print("param\tmode:{mode}\t recommendation criteria")
+    print(f"param\tmode:{mode}\t recommendation criteria")
     prob_thd = args.prob_thd
-    print("param\tprob_thd:{prob_thd}\t recommendation criteria lower bound")
+    print(f"param\tprob_thd:{prob_thd}\t recommendation criteria lower bound")
 
     bgm_auth_id = bases.get_value("bgm_auth_id")
     exp_path = args.exp_path
@@ -232,10 +288,15 @@ if __name__ == "__main__":
     )
 
     if args.user:
-        logits, shows_to_infer = infer_for_user(args.user, model)
+        logits, shows_to_infer, msg = infer_for_user(args.user, model)
 
         print(f"Top {k} reconmmendation:")
-        _ = rec_top_k(logits, shows_to_infer, k, k_min, mode=mode, thd=prob_thd)
+        msg.extend(
+            rec_top_k_v1(logits, shows_to_infer, k, k_min, mode=mode, thd=prob_thd)
+        )
+        recs = "\n".join(msg)
+        print(f"recs message:\n{recs}")
+
     else:
         serving_ckp_dir_path = args.serving_ckp_dir_path
         serving_logging_ckp_idx = args.serving_ckp_idx
@@ -293,12 +354,20 @@ if __name__ == "__main__":
                 try:
                     # get recs TODO
                     logits, shows_to_infer, msg = infer_for_user(id, model)
-                    msg.append("推荐如下")
-                    msg.extend(
-                        rec_top_k(
-                            logits, shows_to_infer, k, k_min, mode=mode, thd=prob_thd
+                    if shows_to_infer:
+                        msg.append("推荐如下")
+                        msg.extend(
+                            rec_top_k(
+                                logits,
+                                shows_to_infer,
+                                k,
+                                k_min,
+                                mode=mode,
+                                thd=prob_thd,
+                            )
                         )
-                    )
+                    else:
+                        pass
                     recs = "\n".join(msg)
                     print(f"recs message:\n{recs}")
                     assert (

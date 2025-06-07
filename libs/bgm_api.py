@@ -25,6 +25,7 @@ def get_user_detail_by_id(auth_id, user, page, pause=0.0):
             "Authorization": f"Bearer {auth_id}",
             "User-Agent": "personalized_anime_amway_system",
         },
+        timeout=30,
     )
     if pause > 0:
         sleep(pause)
@@ -44,6 +45,10 @@ def get_all_results_for_user(auth_id, user):
             total = results["total"]
         else:
             assert total == results["total"]
+        if total <=0:
+            break
+        if len(shows_checked) >= total:
+            break
         for r in results["data"]:
             s = int(r["subject_id"])
             assert s not in shows_checked, page
