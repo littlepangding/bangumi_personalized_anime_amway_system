@@ -190,11 +190,13 @@ class UserShowRatingDataset(Dataset):
         # user_weight=None,
         pad_zero=True,
         neg_sampling=True,
+        user_id_exclude_paired_show=False,
     ):
         self.ratings = ratings
         self.pad_zero = pad_zero
         # self.user_weight = user_weight
         self.neg_sampling = neg_sampling
+        self.user_id_exclude_paired_show = user_id_exclude_paired_show
 
         # get all users and their corresponding shows ids
         self.user_feats = self._prepare_users()
@@ -278,8 +280,14 @@ class UserShowRatingDataset(Dataset):
             label = [1.0 if r > v else 0.0 for v in [5, 6, 7, 8, 9]] + [1.0]
             weights = [1.0] * (NUM_LABEL - 1) + [1.0]
 
+        user_feats = self.user_feats[u]
+        if self.user_id_exclude_paired_show:
+            user_feats_removed = [
+                [v[v != s] for v in user_feats[0]],
+                [v[v != s] for v in user_feats[1]],
+            ]
         return (
-            Feat(user_feat=self.user_feats[u], show_id=s),
+            Feat(user_feat=user_feats, show_id=s),
             label,
             weights,
         )
