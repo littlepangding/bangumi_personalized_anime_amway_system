@@ -33,12 +33,22 @@ if __name__ == "__main__":
     ) = preproc.load_split_data(args.data)
 
     # data prep
-    dataset = preproc.UserShowRatingDataset(out_user_train)
+    dataset = preproc.UserShowRatingDataset(
+        out_user_train,
+        user_id_exclude_paired_show=config_base["preproc"][
+            "user_id_exclude_paired_show"
+        ],
+    )
     loader = DataLoader(
         dataset, batch_size=2048, collate_fn=preproc.custom_collate_fn, shuffle=True
     )
 
-    dataset_val = preproc.UserShowRatingDataset(out_user_val)
+    dataset_val = preproc.UserShowRatingDataset(
+        out_user_val,
+        user_id_exclude_paired_show=config_base["preproc"][
+            "user_id_exclude_paired_show"
+        ],
+    )
     loader_val = DataLoader(
         dataset_val, batch_size=2048, collate_fn=preproc.custom_collate_fn, shuffle=True
     )

@@ -290,7 +290,8 @@ if __name__ == "__main__":
     if args.user:
         logits, shows_to_infer, msg = infer_for_user(args.user, model)
 
-        print(f"Top {k} reconmmendation:")
+        msg.append(f"推荐算法版本: {version}")
+        msg.append("推荐如下")
         msg.extend(
             rec_top_k_v1(logits, shows_to_infer, k, k_min, mode=mode, thd=prob_thd)
         )
@@ -325,7 +326,7 @@ if __name__ == "__main__":
         while True:
             print(f"Start iteration: {iter}")
             if iter > 0:
-                i = randint(5, 10)
+                i = randint(10, 20)
                 print(f"Will sleep for {i} minutes")
                 time.sleep(60 * i)
             iter += 1
@@ -355,6 +356,7 @@ if __name__ == "__main__":
                     # get recs TODO
                     logits, shows_to_infer, msg = infer_for_user(id, model)
                     if shows_to_infer:
+                        msg.append(f"推荐算法版本: {version}")
                         msg.append("推荐如下")
                         msg.extend(
                             rec_top_k(
